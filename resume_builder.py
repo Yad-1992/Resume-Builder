@@ -1,5 +1,7 @@
 import streamlit as st
 import requests
+from fpdf import FPDF
+import io
 
 # Load Groq API key from Streamlit secrets
 API_KEY = st.secrets["GROQ_API_KEY"]
@@ -61,11 +63,32 @@ if st.button("✨ Generate Resume"):
                 st.markdown("### 📄 Your AI-Generated Resume")
                 st.text_area("Resume", resume_text, height=400)
 
+                # TXT download
                 st.download_button(
-                    label="📥 Download Resume as TXT",
+                    label="📥 Download as TXT",
                     data=resume_text,
                     file_name="resume.txt",
                     mime="text/plain"
+                )
+
+                # PDF generation
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_auto_page_break(auto=True, margin=15)
+                pdf.set_font("Arial", size=12)
+
+                for line in resume_text.split("\n"):
+                    pdf.multi_cell(0, 10, line)
+
+                pdf_buffer = io.BytesIO()
+                pdf.output(pdf_buffer)
+                pdf_buffer.seek(0)
+
+                st.download_button(
+                    label="📄 Download as PDF",
+                    data=pdf_buffer,
+                    file_name="resume.pdf",
+                    mime="application/pdf"
                 )
             else:
                 st.error(f"❌ API Error: {response.status_code}")
