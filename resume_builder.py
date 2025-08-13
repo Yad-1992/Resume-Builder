@@ -6,19 +6,21 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from io import BytesIO
 import base64
 
+# Set the page title
 st.title("Resume Builder Web App")
 
-# Function to convert PDF to base64 for download
+# Function to convert PDF bytes to base64 for download
 def pdf_to_base64(pdf_bytes):
     return base64.b64encode(pdf_bytes).decode('utf-8')
 
-# Function to create resume PDF
+# Function to create a PDF resume from user data
 def create_resume_pdf(data, output):
+    # Initialize PDF document with margins
     doc = SimpleDocTemplate(output, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
     styles = getSampleStyleSheet()
     story = []
 
-    # Custom styles
+    # Define custom styles for formatting
     title_style = ParagraphStyle(name='Title', fontSize=20, leading=24, spaceAfter=20, fontName='Helvetica-Bold')
     section_style = ParagraphStyle(name='Section', fontSize=14, leading=18, spaceAfter=10, fontName='Helvetica-Bold')
     normal_style = ParagraphStyle(name='Normal', fontSize=12, leading=14, spaceAfter=8)
@@ -62,9 +64,10 @@ def create_resume_pdf(data, output):
         story.append(Paragraph(f"{proj['description']}", normal_style))
         story.append(Spacer(1, 6))
 
+    # Build the PDF
     doc.build(story)
 
-# Initialize session state for resume data
+# Initialize session state to store resume data
 if 'resume_data' not in st.session_state:
     st.session_state.resume_data = {
         'name': '',
@@ -77,7 +80,7 @@ if 'resume_data' not in st.session_state:
         'projects': []
     }
 
-# Form for user input
+# Create a form for user input
 with st.form("resume_form"):
     st.subheader("Personal Information")
     st.session_state.resume_data['name'] = st.text_input("Full Name", value=st.session_state.resume_data['name'])
@@ -123,7 +126,7 @@ with st.form("resume_form"):
 
     submitted = st.form_submit_button("Generate Resume PDF")
 
-# Real-time preview
+# Real-time preview of the resume
 st.subheader("Resume Preview")
 if st.session_state.resume_data['name']:
     st.write(f"**{st.session_state.resume_data['name']}**")
@@ -146,7 +149,7 @@ if st.session_state.resume_data['name']:
             st.write(f"- {proj['name']}")
             st.write(f"  {proj['description']}")
 
-# Generate and download PDF
+# Generate and provide download link for PDF
 if submitted and st.session_state.resume_data['name']:
     output = BytesIO()
     create_resume_pdf(st.session_state.resume_data, output)
