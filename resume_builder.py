@@ -1,86 +1,64 @@
 import streamlit as st
-import openai
-from fpdf import FPDF
+import requests
 
-# Load OpenAI API key
-openai.api_key = st.secrets.get("OPENAI_API_KEY", "")
+# Load API key from Streamlit secrets
+API_KEY = st.secrets["GOOGLE_API_KEY"]
 
-# Enhance experience with OpenAI
-def enhance_text(prompt):
-    if not openai.api_key:
-        return prompt
-    try:
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=f"Improve this resume bullet point:\n{prompt}",
-            max_tokens=60
-        )
-        return response.choices[0].text.strip()
-    except:
-        return prompt
+# Streamlit UI
+st.set_page_config(page_title="AI Resume Builder", page_icon="🧠", layout="centered")
+st.title("🧠 AI Resume Builder")
+st.write("Fill in your details below and let AI craft a professional resume for you.")
 
-# Generate PDF
-def create_pdf(data):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
+# Input fields
+name = st.text_input("👤 Full Name")
+email = st.text_input("📧 Email")
+summary = st.text_area("📝 Professional Summary")
+skills = st.text_area("🛠️ Skills (comma-separated)")
+experience = st.text_area("💼 Work Experience")
+education = st.text_area("🎓 Education")
 
-    pdf.set_font("Arial", 'B', size=16)
-    pdf.cell(200, 10, txt=data['name'], ln=True, align='C')
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt=f"{data['email']} | {data['phone']}", ln=True, align='C')
-    pdf.ln(10)
+# Generate button
+if st.button("✨ Generate Resume"):
+    with st.spinner("Generating your resume..."):
+        prompt = f"""
+        Create a professional resume using the following details:
+        Name: {name}
+        Email: {email}
+        Summary: {summary}
+        Skills: {skills}
+        Experience: {experience}
+        Education: {education}
+        Format it with clear headings, bullet points, and a clean layout.
+        """
 
-    pdf.set_font("Arial", 'B', size=14)
-    pdf.cell(200, 10, txt="Education", ln=True)
-    pdf.set_font("Arial", size=12)
-    pdf.multi_cell(0, 10, txt=data['education'])
-
-    pdf.set_font("Arial", 'B', size=14)
-    pdf.cell(200, 10, txt="Experience", ln=True)
-    pdf.set_font("Arial", size=12)
-    pdf.multi_cell(0, 10, txt=data['experience'])
-
-    pdf.set_font("Arial", 'B', size=14)
-    pdf.cell(200, 10, txt="Skills", ln=True)
-    pdf.set_font("Arial", size=12)
-    pdf.multi_cell(0, 10, txt=data['skills'])
-
-    output_file = "resume.pdf"
-    pdf.output(output_file)
-    return output_file
-
-# Streamlit App
-st.set_page_config(page_title="AI Resume Builder", page_icon="📝")
-st.title("📝 AI Resume Builder")
-
-with st.form("form"):
-    name = st.text_input("Full Name")
-    email = st.text_input("Email")
-    phone = st.text_input("Phone Number")
-    education = st.text_area("Education")
-    experience = st.text_area("Experience")
-    skills = st.text_input("Skills (comma separated)")
-    enhance = st.checkbox("Enhance experience with AI")
-    submitted = st.form_submit_button("Generate Resume")
-
-if submitted:
-    if not name or not email or not phone:
-        st.warning("Please fill in all required fields.")
-    else:
-        enhanced_exp = enhance_text(experience) if enhance else experience
-
-        resume = {
-            "name": name,
-            "email": email,
-            "phone": phone,
-            "education": education,
-            "experience": enhanced_exp,
-            "skills": skills
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json"
         }
 
-        pdf_file = create_pdf(resume)
+        data = {
+            "contents": [{"parts": [{"text": prompt}]}]
+        }
 
-        with open(pdf_file, "rb") as f:
-            st.success("✅ Resume created!")
-            st.download_button("📄 Download PDF", data=f, file_name="resume.pdf", mime="application/pdf")
+        response = requests.post(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+            headers=headers,
+            json=data
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            resume_text = result['candidates'][0]['content']['parts'][0]['text']
+            st.success("✅ Resume generated successfully!")
+            st.markdown("### 📄 Your AI-Generated Resume")
+            st.text_area("Resume", resume_text, height=400)
+
+            # Optional: Download button
+            st.download_button(
+                label="📥 Download Resume as TXT",
+                data=resume_text,
+                file_name="resume.txt",
+                mime="text/plain"
+            )
+        else:
+            st.error("❌ Failed to generate resume. Please check your API key or try again later.")
