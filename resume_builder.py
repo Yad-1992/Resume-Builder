@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
-from fpdf import FPDF
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
 import io
 
 # Load Groq API key from Streamlit secrets
@@ -35,16 +36,14 @@ st.markdown("""
 # Header
 st.markdown("## 📄 Minimal AI Resume Builder")
 st.markdown("Craft a clean, professional resume with AI in seconds.")
-
-# Divider
 st.markdown("---")
 
-# Template selection
+# Resume style selection
 template = st.selectbox("🎨 Resume Style", [
     "Modern", "Minimalist", "Professional", "Creative", "Compact"
 ])
 
-# Input fields
+# Input form
 with st.form("resume_form"):
     name = st.text_input("👤 Full Name")
     email = st.text_input("📧 Email")
@@ -54,7 +53,25 @@ with st.form("resume_form"):
     education = st.text_area("🎓 Education", height=100)
     submitted = st.form_submit_button("✨ Generate Resume")
 
-# Resume generation
+# PDF generation function using ReportLab
+def generate_pdf(text):
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    y = height - 50
+
+    for line in text.split("\n"):
+        c.drawString(50, y, line)
+        y -= 15
+        if y < 50:
+            c.showPage()
+            y = height - 50
+
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+# Resume generation logic
 if submitted:
     if not API_KEY:
         st.error("❌ API key not found. Please check your Streamlit secrets.")
@@ -107,18 +124,8 @@ if submitted:
                     mime="text/plain"
                 )
 
-                # ✅ Correct PDF generation
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_auto_page_break(auto=True, margin=15)
-                pdf.set_font("Arial", size=12)
-
-                for line in resume_text.split("\n"):
-                    pdf.multi_cell(0, 10, line)
-
-                pdf_bytes = pdf.output(dest='S').encode('latin-1')
-                pdf_buffer = io.BytesIO(pdf_bytes)
-
+                # PDF download
+                pdf_buffer = generate_pdf(resume_text)
                 st.download_button(
                     label="📄 Download as PDF",
                     data=pdf_buffer,
