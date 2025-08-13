@@ -124,6 +124,7 @@ with st.form("resume_form"):
         projects.append({'name': name, 'description': description})
     st.session_state.resume_data['projects'] = projects
 
+    # Explicit submit button for form submission
     submitted = st.form_submit_button("Generate Resume PDF")
 
 # Real-time preview of the resume
@@ -148,16 +149,20 @@ if st.session_state.resume_data['name']:
         if proj['name']:
             st.write(f"- {proj['name']}")
             st.write(f"  {proj['description']}")
+else:
+    st.info("Enter your details to see a preview.")
 
 # Generate and provide download link for PDF
-if submitted and st.session_state.resume_data['name']:
-    output = BytesIO()
-    create_resume_pdf(st.session_state.resume_data, output)
-    st.download_button(
-        label="Download Resume PDF",
-        data=output.getvalue(),
-        file_name="resume.pdf",
-        mime="application/pdf"
-    )
-else:
-    st.info("Please fill in at least your name to generate a resume.")
+if submitted:
+    if st.session_state.resume_data['name']:
+        output = BytesIO()
+        create_resume_pdf(st.session_state.resume_data, output)
+        st.success("Resume PDF generated successfully!")
+        st.download_button(
+            label="Download Resume PDF",
+            data=output.getvalue(),
+            file_name="resume.pdf",
+            mime="application/pdf"
+        )
+    else:
+        st.error("Please fill in at least your name to generate a resume.")
