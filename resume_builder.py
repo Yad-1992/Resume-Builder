@@ -1,10 +1,10 @@
 import streamlit as st
 import requests
 
-# Load API key from Streamlit secrets
-API_KEY = st.secrets["GOOGLE_API_KEY"]
+# Load Groq API key from Streamlit secrets
+API_KEY = st.secrets["GROQ_API_KEY"]
 
-# Streamlit page config
+# Streamlit UI
 st.set_page_config(page_title="AI Resume Builder", page_icon="🧠", layout="centered")
 st.title("🧠 AI Resume Builder")
 st.write("Fill in your details below and let AI craft a professional resume for you.")
@@ -42,31 +42,31 @@ if st.button("✨ Generate Resume"):
             }
 
             data = {
-                "contents": [{"parts": [{"text": prompt}]}]
+                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ]
             }
 
             response = requests.post(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+                "https://api.groq.com/openai/v1/chat/completions",
                 headers=headers,
                 json=data
             )
 
             if response.status_code == 200:
                 result = response.json()
-                try:
-                    resume_text = result['candidates'][0]['content']['parts'][0]['text']
-                    st.success("✅ Resume generated successfully!")
-                    st.markdown("### 📄 Your AI-Generated Resume")
-                    st.text_area("Resume", resume_text, height=400)
+                resume_text = result["choices"][0]["message"]["content"]
+                st.success("✅ Resume generated successfully!")
+                st.markdown("### 📄 Your AI-Generated Resume")
+                st.text_area("Resume", resume_text, height=400)
 
-                    # Download button
-                    st.download_button(
-                        label="📥 Download Resume as TXT",
-                        data=resume_text,
-                        file_name="resume.txt",
-                        mime="text/plain"
-                    )
-                except Exception as e:
-                    st.error("⚠️ Unexpected response format. Please try again.")
+                st.download_button(
+                    label="📥 Download Resume as TXT",
+                    data=resume_text,
+                    file_name="resume.txt",
+                    mime="text/plain"
+                )
             else:
                 st.error(f"❌ API Error: {response.status_code}")
+                st.text(response.text)
