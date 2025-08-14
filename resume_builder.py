@@ -1,4 +1,4 @@
-# app.py -> run: streamlit run app.py
+# app.py — Run: streamlit run app.py
 import os, io, re, json, base64, time, requests, streamlit as st
 from typing import Any, Dict, List
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -48,7 +48,7 @@ with st.form("f"):
 def clean_text(s: str) -> str:
     if not s: return ""
     s = s.replace("mailto:", "")
-    s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)  
+    s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)
     s = re.sub(r"\*\*(.*?)\*\*", r"\1", s)
     s = re.sub(r"\*(.*?)\*", r"\1", s)
     s = re.sub(r"_(.*?)_", r"\1", s)
@@ -62,27 +62,30 @@ def ensure_list(x: Any) -> List[str]:
 def clip(text: str, n: int = 500) -> str:
     return (text[:n] + "…") if text and len(text) > n else (text or "")
 
-# -------------------- FIXED PROMPT --------------------
-PROMPT = """You are a resume composer.
+# -------------------- STRONGER PROMPT --------------------
+PROMPT = """You are a professional resume writer.
 Return JSON ONLY. No explanations. Follow this schema EXACTLY:
 {{
   "name": "Full Name",
   "contact": {{"email": "email", "phone": "phone", "location": "City, Country"}},
   "role": "Target Role",
-  "summary": "1–3 concise lines, impact-focused, no markdown.",
+  "summary": "A polished, concise 2–3 sentence summary that highlights expertise, achievements, and industry keywords.",
   "skills": ["Skill 1","Skill 2","Skill 3","..."],
   "experience": [
     {{"title":"Job Title","company":"Company","period":"YYYY–YYYY",
-     "points":["Action + impact + metric","Led X to achieve Y"]}}
+     "points":["Achievement with metric or impact","Another achievement","Another"]}}
   ],
   "education": [{{"degree":"Degree","institution":"Institution","year":"Year"}}]
 }}
 
 Rules:
-- No markdown links. No placeholders if data exists.
-- Keep language simple, professional, minimal.
-- Prefer concise bullets with actions + results.
-- If a field is missing from user data, infer reasonably.
+- If user input is incomplete, intelligently expand with relevant professional details.
+- Always add 8–12 role-relevant skills.
+- Always add 3–5 bullet points per job, written in action-result format.
+- Make summary impactful and aligned with target role.
+- Use realistic company names, metrics, and responsibilities if missing.
+- Keep language simple, professional, and ATS-friendly.
+- No markdown, no links.
 
 User data:
 Name: {name}
@@ -100,7 +103,7 @@ Education: {edu}
 def call_groq_json(prompt: str, retries: int = 2, timeout: int = 60) -> Dict[str, Any]:
     headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
     payload = {"model": MODEL, "messages": [{"role":"user","content": prompt}],
-               "temperature": 0.2, "max_tokens": 1400}
+               "temperature": 0.4, "max_tokens": 1400}
     for i in range(retries + 1):
         try:
             r = requests.post(GROQ_URL, headers=headers, json=payload, timeout=timeout)
@@ -125,31 +128,9 @@ def coalesce(ai: Dict[str, Any]) -> Dict[str, Any]:
         "role": clean_text(ai.get("role") or role),
         "summary": clip(clean_text(ai.get("summary") or summary_hint), 500),
         "skills": ensure_list(ai.get("skills") or skills_raw),
-        "experience": [],
-        "education": []
+        "experience": ai.get("experience", []),
+        "education": ai.get("education", [])
     }
-    for x in ai.get("experience", []) or []:
-        out["experience"].append({
-            "title": clean_text(x.get("title","")),
-            "company": clean_text(x.get("company","")),
-            "period": clean_text(x.get("period","")),
-            "points": ensure_list(x.get("points", []))
-        })
-    if not out["experience"] and exp_raw:
-        out["experience"] = [{
-            "title": "", "company": clean_text(exp_raw), "period": "", "points": []
-        }]
-    for e in ai.get("education", []) or []:
-        out["education"].append({
-            "degree": clean_text(e.get("degree","")),
-            "institution": clean_text(e.get("institution","")),
-            "year": clean_text(e.get("year",""))
-        })
-    if not out["education"] and edu_raw:
-        parts = [p.strip() for p in edu_raw.split(",") if p.strip()]
-        out["education"] = [{"degree": parts[0] if parts else "",
-                             "institution": parts[1] if len(parts)>1 else "",
-                             "year": parts[2] if len(parts)>2 else ""}]
     return out
 
 # -------------------- PDF --------------------
@@ -168,7 +149,7 @@ def make_pdf(data: Dict[str, Any]) -> bytes:
     styles.add(ParagraphStyle(name="Contact", fontName="Helvetica", fontSize=10, leading=14, alignment=TA_CENTER, textColor=colors.HexColor("#6B7280")))
     styles.add(ParagraphStyle(name="H", fontName="Helvetica-Bold", fontSize=11, textColor=colors.HexColor("#0D47A1"), spaceBefore=12, spaceAfter=6))
     styles.add(ParagraphStyle(name="Body", fontName="Helvetica", fontSize=10, leading=14, alignment=TA_LEFT))
-    styles.add(ParagraphStyle(name="BulletCustom", fontName="Helvetica", fontSize=10, leading=14, leftIndent=12))  # Renamed
+    styles.add(ParagraphStyle(name="BulletCustom", fontName="Helvetica", fontSize=10, leading=14, leftIndent=12))
 
     flow = []
     flow.append(Paragraph(data["name"] or "", styles["Name"]))
@@ -204,7 +185,7 @@ def make_pdf(data: Dict[str, Any]) -> bytes:
             per = x.get("period","")
             flow.append(Paragraph(f"{header}  {f'({per})' if per else ''}", styles["Body"]))
             for p in x.get("points", []):
-                if p: flow.append(Paragraph("• " + p, styles["BulletCustom"]))  # Updated name
+                if p: flow.append(Paragraph("• " + p, styles["BulletCustom"]))
             flow.append(Spacer(1, 0.02*inch))
 
     if data.get("education"):
