@@ -24,47 +24,30 @@ if not API_KEY:
     st.stop()
 
 # -------------------
-# PDF Generator
+# PDF Generator from AI Text
 # -------------------
-def generate_stylish_pdf(name, email, phone, summary, skills, exp_title, exp_period, exp_points, education):
+def generate_pdf_from_ai(ai_text):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=50, bottomMargin=40)
 
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="TitleCenter", fontSize=18, leading=22, alignment=TA_CENTER,
-                              spaceAfter=10, fontName="Helvetica-Bold"))
-    styles.add(ParagraphStyle(name="Header", fontSize=12, leading=14, alignment=TA_LEFT,
-                              textColor=colors.HexColor("#0d47a1"), fontName="Helvetica-Bold",
-                              spaceBefore=12, spaceAfter=6))
-    styles.add(ParagraphStyle(name="Body", fontSize=10, leading=14, alignment=TA_LEFT, fontName="Helvetica"))
-    styles.add(ParagraphStyle(name="BulletCustom", fontSize=10, leading=14, leftIndent=12, fontName="Helvetica"))
+    styles.add(ParagraphStyle(name="BodyCustom", fontSize=10, leading=14, alignment=TA_LEFT, fontName="Helvetica"))
 
     content = []
-    # Header
-    content.append(Paragraph(name, styles["TitleCenter"]))
-    content.append(Paragraph(f"{email} | {phone}", styles["Body"]))
-    content.append(Spacer(1, 0.15 * inch))
-
-    # Summary
-    content.append(Paragraph("Professional Summary", styles["Header"]))
-    content.append(Paragraph(summary, styles["Body"]))
-
-    # Skills
-    content.append(Paragraph("Core Skills", styles["Header"]))
-    for s in skills.split(","):
-        if s.strip():
-            content.append(Paragraph(f"• {s.strip()}", styles["BulletCustom"]))
-
-    # Experience
-    content.append(Paragraph("Professional Experience", styles["Header"]))
-    content.append(Paragraph(f"{exp_title} ({exp_period})", styles["Body"]))
-    for p in exp_points.split("\n"):
-        if p.strip():
-            content.append(Paragraph(f"• {p.strip()}", styles["BulletCustom"]))
-
-    # Education
-    content.append(Paragraph("Education", styles["Header"]))
-    content.append(Paragraph(education, styles["Body"]))
+    for line in ai_text.split("\n"):
+        line = line.strip()
+        if line:
+            if line.startswith("**") and line.endswith("**"):
+                # Section Title (Markdown bold)
+                content.append(Paragraph(line.strip("*"), ParagraphStyle(name="Header", fontSize=12, leading=14,
+                    textColor=colors.HexColor("#0d47a1"), fontName="Helvetica-Bold", spaceBefore=12, spaceAfter=6)))
+            elif line.startswith("* "):
+                # Bullet point
+                content.append(Paragraph("• " + line[2:], styles["BodyCustom"]))
+            else:
+                # Normal text
+                content.append(Paragraph(line, styles["BodyCustom"]))
+            content.append(Spacer(1, 0.05 * inch))
 
     doc.build(content)
     buffer.seek(0)
@@ -98,7 +81,8 @@ if submitted:
     else:
         with st.spinner("Generating AI-enhanced resume..."):
             prompt = f"""
-            Rewrite and polish this resume content in a professional, ATS-friendly style:
+            Create a professional, ATS-friendly resume in Markdown format using the details below.
+            Use clear section headings, bullet points, and professional wording.
             Name: {name}
             Email: {email}
             Phone: {phone}
@@ -130,8 +114,8 @@ if submitted:
                 result = response.json()
                 ai_resume_text = result["choices"][0]["message"]["content"]
 
-                # Generate PDF using cleaned data
-                pdf_buffer = generate_stylish_pdf(name, email, phone, summary, skills, exp_title, exp_period, exp_points, education)
+                # Generate PDF from AI text
+                pdf_buffer = generate_pdf_from_ai(ai_resume_text)
 
                 # Base64 encode for new tab view
                 pdf_base64 = base64.b64encode(pdf_buffer.read()).decode()
@@ -140,9 +124,8 @@ if submitted:
                 st.success("✅ Resume ready!")
 
                 st.download_button("📥 Download PDF", data=pdf_buffer, file_name="resume.pdf", mime="application/pdf")
-
-                # Open in new tab
                 st.markdown(f'<a href="data:application/pdf;base64,{pdf_base64}" target="_blank">🔗 Open in New Tab</a>', unsafe_allow_html=True)
+
             else:
                 st.error(f"❌ API Error: {response.status_code}")
                 st.text(response.text)
