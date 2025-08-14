@@ -168,7 +168,7 @@ def make_pdf(data: Dict[str, Any]) -> bytes:
     styles.add(ParagraphStyle(name="Contact", fontName="Helvetica", fontSize=10, leading=14, alignment=TA_CENTER, textColor=colors.HexColor("#6B7280")))
     styles.add(ParagraphStyle(name="H", fontName="Helvetica-Bold", fontSize=11, textColor=colors.HexColor("#0D47A1"), spaceBefore=12, spaceAfter=6))
     styles.add(ParagraphStyle(name="Body", fontName="Helvetica", fontSize=10, leading=14, alignment=TA_LEFT))
-    styles.add(ParagraphStyle(name="Bullet", fontName="Helvetica", fontSize=10, leading=14, leftIndent=12))
+    styles.add(ParagraphStyle(name="BulletCustom", fontName="Helvetica", fontSize=10, leading=14, leftIndent=12))  # Renamed
 
     flow = []
     flow.append(Paragraph(data["name"] or "", styles["Name"]))
@@ -204,7 +204,7 @@ def make_pdf(data: Dict[str, Any]) -> bytes:
             per = x.get("period","")
             flow.append(Paragraph(f"{header}  {f'({per})' if per else ''}", styles["Body"]))
             for p in x.get("points", []):
-                if p: flow.append(Paragraph("• " + p, styles["Bullet"]))
+                if p: flow.append(Paragraph("• " + p, styles["BulletCustom"]))  # Updated name
             flow.append(Spacer(1, 0.02*inch))
 
     if data.get("education"):
