@@ -1,11 +1,12 @@
 import os
+import re
+import io
+import base64
 import streamlit as st
 import requests
-import base64
-import io
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
+from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import inch
@@ -24,9 +25,16 @@ if not API_KEY:
     st.stop()
 
 # -------------------
-# PDF Generator from AI Text
+# PDF Generator from AI Text (with cleanup)
 # -------------------
 def generate_pdf_from_ai(ai_text):
+    # --- Clean AI text ---
+    ai_text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", ai_text)  # Remove markdown links
+    ai_text = ai_text.replace("mailto:", "")                    # Remove 'mailto:'
+    ai_text = re.sub(r"\*\*(.*?)\*\*", r"\1", ai_text)           # Remove bold markdown
+    ai_text = re.sub(r"\*(.*?)\*", r"\1", ai_text)               # Remove italic markdown
+    ai_text = re.sub(r"_(.*?)_", r"\1", ai_text)                 # Remove underline markdown
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=40, leftMargin=40, topMargin=50, bottomMargin=40)
 
@@ -37,15 +45,17 @@ def generate_pdf_from_ai(ai_text):
     for line in ai_text.split("\n"):
         line = line.strip()
         if line:
-            if line.startswith("**") and line.endswith("**"):
-                # Section Title (Markdown bold)
-                content.append(Paragraph(line.strip("*"), ParagraphStyle(name="Header", fontSize=12, leading=14,
-                    textColor=colors.HexColor("#0d47a1"), fontName="Helvetica-Bold", spaceBefore=12, spaceAfter=6)))
-            elif line.startswith("* "):
+            if line.endswith(":") or line.isupper():
+                # Section Header style
+                content.append(Paragraph(line, ParagraphStyle(
+                    name="Header", fontSize=12, leading=14, textColor=colors.HexColor("#0d47a1"),
+                    fontName="Helvetica-Bold", spaceBefore=12, spaceAfter=6)))
+            elif line.startswith("- ") or line.startswith("* "):
                 # Bullet point
-                content.append(Paragraph("• " + line[2:], styles["BodyCustom"]))
+                line_text = line[2:] if line.startswith(("- ", "* ")) else line
+                content.append(Paragraph("• " + line_text, styles["BodyCustom"]))
             else:
-                # Normal text
+                # Normal body text
                 content.append(Paragraph(line, styles["BodyCustom"]))
             content.append(Spacer(1, 0.05 * inch))
 
@@ -58,7 +68,7 @@ def generate_pdf_from_ai(ai_text):
 # -------------------
 st.set_page_config(page_title="AI Resume Builder", page_icon="📄", layout="centered")
 st.markdown("## 📄 AI Resume Builder")
-st.caption("Fill out your details → AI polishes it → Stylish PDF output")
+st.caption("Fill in your details → AI polishes them → Get a clean, ATS-friendly PDF")
 
 with st.form("resume_form"):
     name = st.text_input("Full Name")
@@ -81,8 +91,8 @@ if submitted:
     else:
         with st.spinner("Generating AI-enhanced resume..."):
             prompt = f"""
-            Create a professional, ATS-friendly resume in Markdown format using the details below.
-            Use clear section headings, bullet points, and professional wording.
+            Create a professional, ATS-friendly resume in plain text with clear section headings and bullet points.
+            Do not use Markdown link syntax for email or phone numbers; write them as plain text.
             Name: {name}
             Email: {email}
             Phone: {phone}
@@ -114,10 +124,10 @@ if submitted:
                 result = response.json()
                 ai_resume_text = result["choices"][0]["message"]["content"]
 
-                # Generate PDF from AI text
+                # Generate cleaned PDF from AI output
                 pdf_buffer = generate_pdf_from_ai(ai_resume_text)
 
-                # Base64 encode for new tab view
+                # Base64 encode for open-in-new-tab
                 pdf_base64 = base64.b64encode(pdf_buffer.read()).decode()
                 pdf_buffer.seek(0)
 
