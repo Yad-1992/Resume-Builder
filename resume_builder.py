@@ -1,145 +1,90 @@
 import os
 import streamlit as st
-import requests
-import base64
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import inch
-from reportlab.lib.enums import TA_LEFT
-import io
+from fpdf import FPDF
+from groq import Groq
 
-# --- API Key loader ---
-API_KEY = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))
+# -------------------
+# API Key Handling
+# -------------------
+GROQ_API_KEY = None
 
-# Page config
-st.set_page_config(
-    page_title="AI Resume Builder",
-    page_icon="📄",
-    layout="centered"
-)
+if "GROQ_API_KEY" in st.secrets:
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+elif "GROQ_API_KEY" in os.environ:
+    GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 
-# Custom styling
-st.markdown("""
-    <style>
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-        max-width: 700px;
-        margin: auto;
-    }
-    textarea {
-        font-size: 14px !important;
-    }
-    .stTextInput > div > input {
-        background-color: #f9f9f9;
-        border-radius: 5px;
-    }
-    </style>
-""", unsafe_allow_html=True)
+if not GROQ_API_KEY:
+    st.error("❌ GROQ_API_KEY not found. Please set it in Streamlit Secrets or as an environment variable.")
+    st.stop()
 
-# Header
-st.markdown("## 📄 Minimal AI Resume Builder")
-st.markdown("Craft a clean, professional resume with AI in seconds.")
-st.markdown("---")
+# -------------------
+# Streamlit UI
+# -------------------
+st.set_page_config(page_title="AI Resume Generator", layout="centered")
 
-# Resume style selection
-template = st.selectbox("🎨 Resume Style", [
-    "Modern", "Minimalist", "Professional", "Creative", "Compact"
-])
+st.title("📄 AI Resume Generator")
+st.write("Fill in the details below to generate a professional resume in PDF format.")
 
-# Input form
-with st.form("resume_form"):
-    name = st.text_input("👤 Full Name")
-    email = st.text_input("📧 Email")
-    summary = st.text_area("📝 Professional Summary", height=100)
-    skills = st.text_area("🛠️ Skills (comma-separated)", height=80)
-    experience = st.text_area("💼 Work Experience", height=120)
-    education = st.text_area("🎓 Education", height=100)
-    submitted = st.form_submit_button("✨ Generate Resume")
+name = st.text_input("Full Name")
+email = st.text_input("Email")
+phone = st.text_input("Phone")
+summary = st.text_area("Professional Summary")
+skills = st.text_area("Skills (comma separated)")
+experience = st.text_area("Experience (one job per line: Job Title - Company - Years)")
+education = st.text_area("Education (one entry per line: Degree - Institution - Year)")
 
-# PDF generator using AI text
-def generate_pdf_from_ai(ai_text):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4,
-                            rightMargin=40, leftMargin=40,
-                            topMargin=60, bottomMargin=40)
+if st.button("Generate Resume PDF"):
+    with st.spinner("Creating your AI-powered resume..."):
 
-    styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name='BodyText', fontSize=11, leading=14, spaceAfter=8, alignment=TA_LEFT))
+        # -------------------
+        # AI Resume Generation
+        # -------------------
+        client = Groq(api_key=GROQ_API_KEY)
 
-    content = []
-    for line in ai_text.split("\n"):
-        if line.strip():
-            content.append(Paragraph(line.strip(), styles['BodyText']))
-            content.append(Spacer(1, 0.1 * inch))
+        prompt = f"""
+        Create a professional, ATS-friendly resume in plain text using the details below:
+        Name: {name}
+        Email: {email}
+        Phone: {phone}
+        Summary: {summary}
+        Skills: {skills}
+        Experience: {experience}
+        Education: {education}
+        Format it neatly for a resume.
+        """
 
-    doc.build(content)
-    buffer.seek(0)
-    return buffer
-
-# Resume generation logic
-if submitted:
-    if not API_KEY:
-        st.error("❌ API key not found. Please set it in Streamlit secrets or as an environment variable.")
-    elif not name or not email:
-        st.warning("⚠️ Please enter at least your name and email.")
-    else:
-        with st.spinner("Generating your resume..."):
-            prompt = f"""
-            Create a {template.lower()} style resume using the following details:
-            Name: {name}
-            Email: {email}
-            Summary: {summary}
-            Skills: {skills}
-            Experience: {experience}
-            Education: {education}
-            Format it with clear headings, bullet points, and a layout that reflects the '{template}' style.
-            """
-
-            headers = {
-                "Authorization": f"Bearer {API_KEY}",
-                "Content-Type": "application/json"
-            }
-
-            data = {
-                "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ]
-            }
-
-            response = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers=headers,
-                json=data
+        try:
+            response = client.chat.completions.create(
+                model="llama3-8b-8192",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=1000
             )
 
-            if response.status_code == 200:
-                result = response.json()
-                resume_text = result["choices"][0]["message"]["content"]
+            resume_text = response.choices[0].message.content.strip()
 
-                # Generate PDF from AI text
-                pdf_buffer = generate_pdf_from_ai(resume_text)
+            # -------------------
+            # PDF Creation
+            # -------------------
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", size=12)
+            for line in resume_text.split("\n"):
+                pdf.multi_cell(0, 8, line)
 
-                # Encode PDF to Base64
-                pdf_base64 = base64.b64encode(pdf_buffer.read()).decode()
-                pdf_buffer.seek(0)
+            pdf_filename = "resume.pdf"
+            pdf.output(pdf_filename)
 
-                st.success("✅ Resume generated successfully!")
-
-                # Download button
+            # -------------------
+            # Download Button
+            # -------------------
+            with open(pdf_filename, "rb") as file:
                 st.download_button(
-                    label="📄 Download Resume as PDF",
-                    data=pdf_buffer,
+                    label="📥 Download Resume PDF",
+                    data=file,
                     file_name="resume.pdf",
                     mime="application/pdf"
                 )
 
-                # Open in new tab link
-                open_link_html = f'<a href="data:application/pdf;base64,{pdf_base64}" target="_blank">🔗 Open Resume in New Tab</a>'
-                st.markdown(open_link_html, unsafe_allow_html=True)
-
-            else:
-                st.error(f"❌ API Error: {response.status_code}")
-                st.text(response.text)
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
