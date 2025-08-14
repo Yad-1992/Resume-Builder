@@ -1,4 +1,4 @@
-# app.py  ->  streamlit run app.py
+# app.py -> run: streamlit run app.py
 import os, io, re, json, base64, time, requests, streamlit as st
 from typing import Any, Dict, List
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -8,7 +8,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 
-# -------------------- CONFIG --------------------
+# -------------------- PAGE CONFIG --------------------
 st.set_page_config(page_title="AI Resume Builder", page_icon="📄", layout="centered")
 st.markdown("""<style>
 .block-container {max-width: 760px;}
@@ -16,17 +16,21 @@ h1,h2 {margin-bottom:.2rem}
 .small {color:#6b7280;font-size:12px}
 </style>""", unsafe_allow_html=True)
 
+# -------------------- API KEY HANDLING --------------------
 API_KEY = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))
 if not API_KEY:
-    st.error("Set GROQ_API_KEY in Streamlit Secrets or env.")
-    st.stop()
+    st.warning("🔑 No GROQ API key found. Enter it below to continue.")
+    API_KEY = st.text_input("Enter GROQ API Key", type="password")
+    if not API_KEY:
+        st.stop()
 
 MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# -------------------- UI (minimal inputs) --------------------
+# -------------------- UI --------------------
 st.markdown("## 📄 AI Resume Builder — Professional & Minimal")
-st.caption("Enter a few fields. AI builds the rest.")
+st.caption("Enter minimal info, AI will build the rest.")
+
 with st.form("f"):
     name = st.text_input("Full Name")
     email = st.text_input("Email")
@@ -40,11 +44,11 @@ with st.form("f"):
     city_country = st.text_input("Location (optional)")
     submitted    = st.form_submit_button("✨ Generate Resume")
 
-# -------------------- Helpers --------------------
+# -------------------- HELPERS --------------------
 def clean_text(s: str) -> str:
     if not s: return ""
     s = s.replace("mailto:", "")
-    s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)  # [text](url) -> text
+    s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)  
     s = re.sub(r"\*\*(.*?)\*\*", r"\1", s)
     s = re.sub(r"\*(.*?)\*", r"\1", s)
     s = re.sub(r"_(.*?)_", r"\1", s)
@@ -58,19 +62,6 @@ def ensure_list(x: Any) -> List[str]:
 def clip(text: str, n: int = 500) -> str:
     return (text[:n] + "…") if text and len(text) > n else (text or "")
 
-SCHEMA_EXAMPLE = {
-  "name": "Full Name",
-  "contact": {"email": "email", "phone": "phone", "location": "City, Country"},
-  "role": "Target Role",
-  "summary": "1–3 concise lines (impact-focused).",
-  "skills": ["Skill 1","Skill 2","Skill 3"],
-  "experience": [
-    {"title":"Job Title","company":"Company","period":"YYYY–YYYY",
-     "points":["Action + impact + metric","Led X to achieve Y"]}
-  ],
-  "education": [{"degree":"Degree","institution":"Institution","year":"Year"}]
-}
-
 PROMPT = """You are a resume composer.
 Return JSON ONLY. No explanations. Follow this schema EXACTLY:
 {
@@ -81,7 +72,7 @@ Return JSON ONLY. No explanations. Follow this schema EXACTLY:
   "skills": ["Skill 1","Skill 2","Skill 3","..."],
   "experience": [
     {"title":"Job Title","company":"Company","period":"YYYY–YYYY",
-     "points":["Start with a verb. Show impact with numbers if possible.", "Keep each point short."]}
+     "points":["Action + impact + metric","Led X to achieve Y"]}
   ],
   "education": [{"degree":"Degree","institution":"Institution","year":"Year"}]
 }
@@ -113,7 +104,6 @@ def call_groq_json(prompt: str, retries: int = 2, timeout: int = 60) -> Dict[str
             r = requests.post(GROQ_URL, headers=headers, json=payload, timeout=timeout)
             r.raise_for_status()
             txt = r.json()["choices"][0]["message"]["content"].strip()
-            # extract JSON
             m = re.search(r"\{[\s\S]*\}\s*$", txt)
             raw = m.group(0) if m else "{}"
             return json.loads(raw)
@@ -136,7 +126,6 @@ def coalesce(ai: Dict[str, Any]) -> Dict[str, Any]:
         "experience": [],
         "education": []
     }
-    # experience
     for x in ai.get("experience", []) or []:
         out["experience"].append({
             "title": clean_text(x.get("title","")),
@@ -148,7 +137,6 @@ def coalesce(ai: Dict[str, Any]) -> Dict[str, Any]:
         out["experience"] = [{
             "title": "", "company": clean_text(exp_raw), "period": "", "points": []
         }]
-    # education
     for e in ai.get("education", []) or []:
         out["education"].append({
             "degree": clean_text(e.get("degree","")),
@@ -162,7 +150,7 @@ def coalesce(ai: Dict[str, Any]) -> Dict[str, Any]:
                              "year": parts[2] if len(parts)>2 else ""}]
     return out
 
-# -------------------- PDF (Professional Minimal) --------------------
+# -------------------- PDF --------------------
 def divider():
     t = Table([[""]], colWidths=[460])
     t.setStyle(TableStyle([("LINEBELOW",(0,0),(-1,-1), 0.6, colors.HexColor("#E5E7EB"))]))
@@ -181,7 +169,6 @@ def make_pdf(data: Dict[str, Any]) -> bytes:
     styles.add(ParagraphStyle(name="Bullet", fontName="Helvetica", fontSize=10, leading=14, leftIndent=12))
 
     flow = []
-    # Header
     flow.append(Paragraph(data["name"] or "", styles["Name"]))
     if data.get("role"): flow.append(Paragraph(data["role"], styles["Role"]))
     contact_line = "  •  ".join([x for x in [data["contact"].get("email",""), data["contact"].get("phone",""), data["contact"].get("location","")] if x])
@@ -189,16 +176,13 @@ def make_pdf(data: Dict[str, Any]) -> bytes:
     flow.append(Spacer(1, 0.12*inch))
     flow.append(divider()); flow.append(Spacer(1, 0.04*inch))
 
-    # Summary
     if data.get("summary"):
         flow.append(Paragraph("PROFESSIONAL SUMMARY", styles["H"]))
         flow.append(Paragraph(data["summary"], styles["Body"]))
         flow.append(Spacer(1, 0.04*inch))
 
-    # Skills
     if data.get("skills"):
         flow.append(Paragraph("CORE SKILLS", styles["H"]))
-        # inline bullet line, 3–5 per line
         line, count = "", 0
         for s in data["skills"]:
             token = (" • " if count else "") + s
@@ -211,7 +195,6 @@ def make_pdf(data: Dict[str, Any]) -> bytes:
         if line: flow.append(Paragraph(line, styles["Body"]))
         flow.append(Spacer(1, 0.04*inch))
 
-    # Experience
     if data.get("experience"):
         flow.append(Paragraph("EXPERIENCE", styles["H"]))
         for x in data["experience"]:
@@ -222,7 +205,6 @@ def make_pdf(data: Dict[str, Any]) -> bytes:
                 if p: flow.append(Paragraph("• " + p, styles["Bullet"]))
             flow.append(Spacer(1, 0.02*inch))
 
-    # Education
     if data.get("education"):
         flow.append(Paragraph("EDUCATION", styles["H"]))
         for e in data["education"]:
@@ -234,7 +216,7 @@ def make_pdf(data: Dict[str, Any]) -> bytes:
     buf.seek(0)
     return buf.read()
 
-# -------------------- RUN --------------------
+# -------------------- MAIN --------------------
 if submitted:
     if not name or not email:
         st.warning("Name & Email required.")
