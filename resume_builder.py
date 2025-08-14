@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import requests
 import base64
@@ -8,8 +9,8 @@ from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_LEFT
 import io
 
-# Load Groq API key from Streamlit secrets
-API_KEY = st.secrets["GROQ_API_KEY"]
+# --- API Key loader ---
+API_KEY = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))
 
 # Page config
 st.set_page_config(
@@ -80,7 +81,7 @@ def generate_pdf_from_ai(ai_text):
 # Resume generation logic
 if submitted:
     if not API_KEY:
-        st.error("❌ API key not found. Please check your Streamlit secrets.")
+        st.error("❌ API key not found. Please set it in Streamlit secrets or as an environment variable.")
     elif not name or not email:
         st.warning("⚠️ Please enter at least your name and email.")
     else:
@@ -135,7 +136,7 @@ if submitted:
                     mime="application/pdf"
                 )
 
-                # Open in browser
+                # Show inline in browser
                 pdf_viewer_html = f'<iframe src="data:application/pdf;base64,{pdf_base64}" width="100%" height="800px"></iframe>'
                 st.markdown(pdf_viewer_html, unsafe_allow_html=True)
 
