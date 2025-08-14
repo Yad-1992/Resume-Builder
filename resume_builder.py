@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import base64
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
@@ -56,38 +57,21 @@ with st.form("resume_form"):
     education = st.text_area("🎓 Education", height=100)
     submitted = st.form_submit_button("✨ Generate Resume")
 
-# Stylish PDF generator
-def generate_stylish_pdf(name, email, summary, skills, experience, education):
+# PDF generator using AI text
+def generate_pdf_from_ai(ai_text):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4,
                             rightMargin=40, leftMargin=40,
                             topMargin=60, bottomMargin=40)
 
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name='SectionHeader', fontSize=14, leading=16, spaceAfter=10, spaceBefore=20, alignment=TA_LEFT, textColor="#333333", fontName="Helvetica-Bold"))
     styles.add(ParagraphStyle(name='BodyText', fontSize=11, leading=14, spaceAfter=8, alignment=TA_LEFT))
 
     content = []
-
-    # Header
-    content.append(Paragraph(f"<b>{name}</b><br/><font size=10>{email}</font>", styles['Title']))
-    content.append(Spacer(1, 0.2 * inch))
-
-    # Summary
-    content.append(Paragraph("📝 Summary", styles['SectionHeader']))
-    content.append(Paragraph(summary, styles['BodyText']))
-
-    # Skills
-    content.append(Paragraph("🛠️ Skills", styles['SectionHeader']))
-    content.append(Paragraph(skills.replace(",", ", "), styles['BodyText']))
-
-    # Experience
-    content.append(Paragraph("💼 Experience", styles['SectionHeader']))
-    content.append(Paragraph(experience, styles['BodyText']))
-
-    # Education
-    content.append(Paragraph("🎓 Education", styles['SectionHeader']))
-    content.append(Paragraph(education, styles['BodyText']))
+    for line in ai_text.split("\n"):
+        if line.strip():
+            content.append(Paragraph(line.strip(), styles['BodyText']))
+            content.append(Spacer(1, 0.1 * inch))
 
     doc.build(content)
     buffer.seek(0)
@@ -133,27 +117,28 @@ if submitted:
             if response.status_code == 200:
                 result = response.json()
                 resume_text = result["choices"][0]["message"]["content"]
+
+                # Generate PDF from AI text
+                pdf_buffer = generate_pdf_from_ai(resume_text)
+
+                # Encode PDF to Base64 for inline viewing
+                pdf_base64 = base64.b64encode(pdf_buffer.read()).decode()
+                pdf_buffer.seek(0)
+
                 st.success("✅ Resume generated successfully!")
 
-                st.markdown("### 📄 Preview")
-                st.text_area("Your Resume", resume_text, height=400)
-
-                # TXT download
+                # Download button
                 st.download_button(
-                    label="📥 Download as TXT",
-                    data=resume_text,
-                    file_name="resume.txt",
-                    mime="text/plain"
-                )
-
-                # Stylish PDF download
-                pdf_buffer = generate_stylish_pdf(name, email, summary, skills, experience, education)
-                st.download_button(
-                    label="📄 Download as Stylish PDF",
+                    label="📄 Download Resume as PDF",
                     data=pdf_buffer,
                     file_name="resume.pdf",
                     mime="application/pdf"
                 )
+
+                # Open in browser
+                pdf_viewer_html = f'<iframe src="data:application/pdf;base64,{pdf_base64}" width="100%" height="800px"></iframe>'
+                st.markdown(pdf_viewer_html, unsafe_allow_html=True)
+
             else:
                 st.error(f"❌ API Error: {response.status_code}")
                 st.text(response.text)
