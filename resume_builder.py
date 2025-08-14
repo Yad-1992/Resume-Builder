@@ -122,7 +122,7 @@ if submitted:
                 # Generate PDF from AI text
                 pdf_buffer = generate_pdf_from_ai(resume_text)
 
-                # Encode PDF to Base64 for inline viewing
+                # Encode PDF to Base64
                 pdf_base64 = base64.b64encode(pdf_buffer.read()).decode()
                 pdf_buffer.seek(0)
 
@@ -136,9 +136,9 @@ if submitted:
                     mime="application/pdf"
                 )
 
-                # Show inline in browser
-                pdf_viewer_html = f'<iframe src="data:application/pdf;base64,{pdf_base64}" width="100%" height="800px"></iframe>'
-                st.markdown(pdf_viewer_html, unsafe_allow_html=True)
+                # Open in new tab link
+                open_link_html = f'<a href="data:application/pdf;base64,{pdf_base64}" target="_blank">🔗 Open Resume in New Tab</a>'
+                st.markdown(open_link_html, unsafe_allow_html=True)
 
             else:
                 st.error(f"❌ API Error: {response.status_code}")
