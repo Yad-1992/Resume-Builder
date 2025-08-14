@@ -2,3 +2,4 @@ streamlit
 requests
 reportlab
 fpdf
+groq
