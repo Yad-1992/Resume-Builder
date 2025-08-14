@@ -62,20 +62,21 @@ def ensure_list(x: Any) -> List[str]:
 def clip(text: str, n: int = 500) -> str:
     return (text[:n] + "…") if text and len(text) > n else (text or "")
 
+# -------------------- FIXED PROMPT --------------------
 PROMPT = """You are a resume composer.
 Return JSON ONLY. No explanations. Follow this schema EXACTLY:
-{
+{{
   "name": "Full Name",
-  "contact": {"email": "email", "phone": "phone", "location": "City, Country"},
+  "contact": {{"email": "email", "phone": "phone", "location": "City, Country"}},
   "role": "Target Role",
   "summary": "1–3 concise lines, impact-focused, no markdown.",
   "skills": ["Skill 1","Skill 2","Skill 3","..."],
   "experience": [
-    {"title":"Job Title","company":"Company","period":"YYYY–YYYY",
-     "points":["Action + impact + metric","Led X to achieve Y"]}
+    {{"title":"Job Title","company":"Company","period":"YYYY–YYYY",
+     "points":["Action + impact + metric","Led X to achieve Y"]}}
   ],
-  "education": [{"degree":"Degree","institution":"Institution","year":"Year"}]
-}
+  "education": [{{"degree":"Degree","institution":"Institution","year":"Year"}}]
+}}
 
 Rules:
 - No markdown links. No placeholders if data exists.
@@ -95,6 +96,7 @@ Past roles: {exp}
 Education: {edu}
 """
 
+# -------------------- AI CALL --------------------
 def call_groq_json(prompt: str, retries: int = 2, timeout: int = 60) -> Dict[str, Any]:
     headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
     payload = {"model": MODEL, "messages": [{"role":"user","content": prompt}],
